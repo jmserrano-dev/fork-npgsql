@@ -161,7 +161,14 @@ namespace Npgsql
 
             NpgsqlEventLog.LogMethodEnter(LogLevel.Debug, CLASSNAME, "Commit");
 
-            NpgsqlCommand.ExecuteBlind(_conn.Connector, NpgsqlQuery.CommitTransaction);
+            if (this._conn.CommandTimeout == 0)
+            {
+                NpgsqlCommand.ExecuteBlindSuppressTimeout(_conn.Connector, NpgsqlQuery.CommitTransaction);
+            }
+            else
+            {
+                NpgsqlCommand.ExecuteBlind(_conn.Connector, NpgsqlQuery.CommitTransaction);
+            }
 
             _conn.Connector.Transaction = null;
             _conn = null;
