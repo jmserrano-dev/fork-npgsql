@@ -55,6 +55,8 @@ namespace Npgsql
 	[Serializable]
 	public sealed class NpgsqlError
 	{
+		private static readonly global::Common.Logging.ILog _Log = global::Common.Logging.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+
 		private readonly ProtocolVersion protocol_version;
 		private readonly String _severity = String.Empty;
 		private readonly String _code = String.Empty;
@@ -287,7 +289,9 @@ namespace Npgsql
 									_routine = PGUtil.ReadString(stream);
 									;
 									break;
-								
+								default:
+									_Log.Error($"Unexpected error code: {field}");
+									break;
 							}
 						}
 					}
