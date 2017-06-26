@@ -55,8 +55,10 @@ namespace Npgsql
     /// </summary>
     internal class NpgsqlConnector
     {
-        // Immutable.
-        private readonly NpgsqlConnectionStringBuilder settings;
+		private static readonly global::Common.Logging.ILog _Log = global::Common.Logging.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+
+		// Immutable.
+		private readonly NpgsqlConnectionStringBuilder settings;
 
         /// <summary>
         /// Occurs on NoticeResponses from the PostgreSQL backend.
@@ -910,7 +912,9 @@ namespace Npgsql
 
         internal class NpgsqlContextHolder
         {
-            private readonly NpgsqlConnector connector;
+			private static readonly global::Common.Logging.ILog _Log = global::Common.Logging.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+
+			private readonly NpgsqlConnector connector;
             private readonly NpgsqlState state;
 
             internal NpgsqlContextHolder(NpgsqlConnector connector, NpgsqlState state)
@@ -994,6 +998,7 @@ namespace Npgsql
               
             catch(NpgsqlException e)
             {
+				_Log.Warn("CheckParameter failed", e);
                 return null;
             }
             /*
