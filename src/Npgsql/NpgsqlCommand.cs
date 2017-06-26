@@ -60,7 +60,9 @@ namespace Npgsql
         private static readonly Regex parameterReplace = new Regex(@"([:@][\w\.]*)", RegexOptions.Singleline|RegexOptions.Compiled);
         private static readonly Regex POSTGRES_TEXT_ARRAY = new Regex(@"^array\[+'", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-        private NpgsqlConnection connection;
+		private static readonly global::Common.Logging.ILog _Log = global::Common.Logging.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+
+		private NpgsqlConnection connection;
         private NpgsqlConnector m_Connector; //renamed to account for hiding it in a local function
         //if all locals were named with this prefix, it would solve LOTS of issues.
         private NpgsqlTransaction transaction;
@@ -566,27 +568,28 @@ namespace Npgsql
             
             // Close connection if requested even when there is an error.
 
-                    try
-                    {
-                        if (connection != null)
-                        {
-                            if (connection.PreloadReader)
-                            {
-                                //Adjust behaviour so source reader is sequential access - for speed - and doesn't close the connection - or it'll do so at the wrong time.
-                                CommandBehavior adjusted = (cb | CommandBehavior.SequentialAccess) & ~CommandBehavior.CloseConnection;
-                                return new CachingDataReader(GetReader(adjusted), cb);
-                            }
-                        }
-                    return GetReader(cb);
-                    }
-                    catch (Exception)
-                    {
-                        if ((cb & CommandBehavior.CloseConnection) == CommandBehavior.CloseConnection)
+            try
             {
-                            connection.Close();
-            }
-                        throw;
+                if (connection != null)
+                {
+                    if (connection.PreloadReader)
+                    {
+                        //Adjust behaviour so source reader is sequential access - for speed - and doesn't close the connection - or it'll do so at the wrong time.
+                        CommandBehavior adjusted = (cb | CommandBehavior.SequentialAccess) & ~CommandBehavior.CloseConnection;
+                        return new CachingDataReader(GetReader(adjusted), cb);
                     }
+                }
+				return GetReader(cb);
+            }
+            catch (Exception ex)
+            {
+				_Log.Error("Exception in ExecuteReader", ex);
+                if ((cb & CommandBehavior.CloseConnection) == CommandBehavior.CloseConnection)
+				{
+					connection.Close();
+				}
+                throw;
+            }
                 
         }
 
@@ -639,6 +642,11 @@ namespace Npgsql
             {
                 throw ClearPoolAndCreateException(ex);
             }
+			catch (Exception ex)
+			{
+				_Log.Error($"Exception in GetReader()", ex);
+				throw;
+			}
         }
 
         ///<summary>
@@ -692,10 +700,12 @@ namespace Npgsql
 
                 Connector.Flush();
             }
-            catch
+            catch (Exception ex)
             {
-                // Check catch{} of Preapre method for discussion about that.
-                Connector.Sync();
+				_Log.Error($"Exception in BindParameters()", ex);
+
+				// Check catch{} of Preapre method for discussion about that.
+				Connector.Sync();
                 throw;
             }
         }
@@ -812,22 +822,22 @@ namespace Npgsql
                     {
                         throw ClearPoolAndCreateException(e);
                     }
-                    catch
+                    catch (Exception ex)
                     {
+						_Log.Error($"Exception in Prepare()", ex);
+						// As per documentation:
 
-                        // As per documentation:
+						// "[...] When an error is detected while processing any extended-query message,
 
-                        // "[...] When an error is detected while processing any extended-query message,
+						// the backend issues ErrorResponse, then reads and discards messages until a
 
-                        // the backend issues ErrorResponse, then reads and discards messages until a
+						// Sync is reached, then issues ReadyForQuery and returns to normal message processing.[...]"
 
-                        // Sync is reached, then issues ReadyForQuery and returns to normal message processing.[...]"
-
-                        // So, send a sync command if we get any problems.
+						// So, send a sync command if we get any problems.
 
 
 
-                        m_Connector.Sync();
+						m_Connector.Sync();
 
                         throw;
                     }
@@ -865,7 +875,6 @@ namespace Npgsql
         {
             NpgsqlEventLog.LogMethodEnter(LogLevel.Debug, CLASSNAME, "CheckConnectionState");
 
-
             // Check the connection state.
             if (Connector == null || Connector.State == ConnectionState.Closed)
             {
@@ -876,6 +885,8 @@ namespace Npgsql
                 throw new InvalidOperationException(
                     "There is already an open DataReader associated with this Command which must be closed first.");
             }
+
+			_Log.Debug($"Connector.State: {Connector.State}");
         }
 
         /// <summary>
@@ -1488,6 +1499,8 @@ namespace Npgsql
             {
                 timeout = (int)NpgsqlConnectionStringBuilder.GetDefaultValue(Keywords.CommandTimeout);
             }
+
+			_Log.Debug($"Set command timeout to {timeout}");
         }
 
         internal NpgsqlException ClearPoolAndCreateException(Exception e)

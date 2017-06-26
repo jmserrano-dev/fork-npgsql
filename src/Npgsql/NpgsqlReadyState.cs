@@ -29,6 +29,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Linq;
 
 namespace Npgsql
 {
@@ -43,6 +44,9 @@ namespace Npgsql
 		private static readonly NpgsqlSync _syncMessage = new NpgsqlSync();
 
 		private readonly String CLASSNAME = MethodBase.GetCurrentMethod().DeclaringType.Name;
+
+		private static readonly global::Common.Logging.ILog _Log = global::Common.Logging.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+
 
 		private NpgsqlReadyState()
 			: base()
@@ -61,10 +65,23 @@ namespace Npgsql
 
 			NpgsqlQuery query = new NpgsqlQuery(command, context.BackendProtocolVersion);
 
-			query.WriteToStream(context.Stream);
-			context.Stream.Flush();
+			try
+			{
+				query.WriteToStream(context.Stream);
+				context.Stream.Flush();
+			}
+			catch(Exception ex)
+			{
+				_Log.Error($"QueryEnum: unable to write to stream", ex);
+				throw;
+			}
 
-			return ProcessBackendResponsesEnum(context);
+			//_Log.Debug($"Stream flushed. Processing responses {context.Stream}");
+			_Log.Trace("QueryEnum stream flushed. Processing responses");
+			var responses = ProcessBackendResponsesEnum(context);
+			_Log.Trace($"QueryEnum a total of {responses.Count()} responses processed");
+
+			return responses;
 		}
 
 		public override void Parse(NpgsqlConnector context, NpgsqlParse parse)
@@ -147,8 +164,9 @@ namespace Npgsql
 			{
 				stream.Close();
 			}
-			catch
+			catch (Exception ex)
 			{
+				_Log.Warn($"Exception closing stream", ex);
 			}
 
 			context.Stream = null;

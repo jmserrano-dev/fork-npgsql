@@ -46,7 +46,9 @@ namespace Npgsql
     ///
     internal abstract class NpgsqlState
     {
-        protected static readonly Encoding ENCODING_UTF8 = Encoding.UTF8;
+		private static readonly global::Common.Logging.ILog _Log = global::Common.Logging.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+
+		protected static readonly Encoding ENCODING_UTF8 = Encoding.UTF8;
         private readonly String CLASSNAME = MethodBase.GetCurrentMethod().DeclaringType.Name;
         protected readonly static ResourceManager resman = new ResourceManager(MethodBase.GetCurrentMethod().DeclaringType);
 
@@ -287,8 +289,9 @@ namespace Npgsql
             {
                 context.Stream.Close();
             }
-            catch
+            catch (Exception ex)
             {
+				_Log.Warn("Error closing stream", ex);
             }
             context.Stream = null;
             ChangeState(context, NpgsqlClosedState.Instance);
@@ -351,65 +354,79 @@ namespace Npgsql
         {
             try
             {
-            // Process commandTimeout behavior.
+				// Process commandTimeout behavior.
 
-            if ((context.Mediator.CommandTimeout > 0) &&
-                (!context.Socket.Poll(1000000*context.Mediator.CommandTimeout, SelectMode.SelectRead)))
-            {
-                // If timeout occurs when establishing the session with server then
-                // throw an exception instead of trying to cancel query. This helps to prevent loop as CancelRequest will also try to stablish a connection and sends commands.
-                if (!((this is NpgsqlStartupState || this is NpgsqlConnectedState)))
-                {
-                    try
-                    {
-                        context.CancelRequest();
-                        foreach (IServerResponseObject obj in ProcessBackendResponsesEnum(context))
-                        {
-                            if (obj is IDisposable)
-                            {
-                                (obj as IDisposable).Dispose();
-                            }
-                        }
-                    }
-                    catch(Exception ex)
-                    {
-                    }
-                    //We should have gotten an error from CancelRequest(). Whether we did or not, what we
-                    //really have is a timeout exception, and that will be less confusing to the user than
-                    //"operation cancelled by user" or similar, so whatever the case, that is what we'll throw.
-                    // Changed message again to report about the two possible timeouts: connection or command as the establishment timeout only was confusing users when the timeout was a command timeout.
-                }
-                throw new NpgsqlException(resman.GetString("Exception_ConnectionOrCommandTimeout"));
-            }
-            switch (context.BackendProtocolVersion)
-            {
-                case ProtocolVersion.Version2:
-                    return ProcessBackendResponses_Ver_2(context);
-                case ProtocolVersion.Version3:
-                    return ProcessBackendResponses_Ver_3(context);
-                default:
-                    throw new NpgsqlException(resman.GetString("Exception_UnknownProtocol"));
-            }
+				_Log.Debug($"Entering ProcessBackendResponsesEnum. CommandTimeout: {context.Mediator.CommandTimeout}");
+
+				if ((context.Mediator.CommandTimeout > 0) &&
+					(!context.Socket.Poll(1000000*context.Mediator.CommandTimeout, SelectMode.SelectRead)))
+				{
+					_Log.Debug("Managing timeout");
+
+					// If timeout occurs when establishing the session with server then
+					// throw an exception instead of trying to cancel query. This helps to prevent loop as CancelRequest will also try to stablish a connection and sends commands.
+					if (!((this is NpgsqlStartupState || this is NpgsqlConnectedState)))
+					{
+						_Log.Debug("Managing not NpgsqlStartupState neither NpgsqlConnectedState");
+						try
+						{
+							context.CancelRequest();
+							foreach (IServerResponseObject obj in ProcessBackendResponsesEnum(context))
+							{
+								if (obj is IDisposable)
+								{
+									(obj as IDisposable).Dispose();
+								}
+							}
+						}
+						catch(Exception ex)
+						{
+							_Log.Error($"In ProcessBackendResponsesEnum trying cancel on timeout got exception {ex.Message}", ex);
+						}
+						//We should have gotten an error from CancelRequest(). Whether we did or not, what we
+						//really have is a timeout exception, and that will be less confusing to the user than
+						//"operation cancelled by user" or similar, so whatever the case, that is what we'll throw.
+						// Changed message again to report about the two possible timeouts: connection or command as the establishment timeout only was confusing users when the timeout was a command timeout.
+					}
+					throw new NpgsqlException(resman.GetString("Exception_ConnectionOrCommandTimeout"));
+				}
+
+				_Log.Debug($"ProcessBackendResponsesEnum with protocol version {context.BackendProtocolVersion}");
+
+				switch (context.BackendProtocolVersion)
+				{
+					case ProtocolVersion.Version2:
+						return ProcessBackendResponses_Ver_2(context);
+					case ProtocolVersion.Version3:
+						return ProcessBackendResponses_Ver_3(context);
+					default:
+						throw new NpgsqlException(resman.GetString("Exception_UnknownProtocol"));
+				}
             
-            }
-            
-            catch(ThreadAbortException)
+            }            
+            catch(ThreadAbortException ex)
             {
-                try
-                {
-                    context.CancelRequest();
-                    context.Close();
-                }
-                catch {}
-                
-                throw;
+				_Log.Error($"ThreadAbortException processing backend responses", ex);
+
+				try
+				{
+					context.CancelRequest();
+					context.Close();
+				}
+				catch { }
+
+				throw;
             }
-                
-        }
+			catch(Exception ex)
+			{
+				_Log.Error($"ProcessBackendResponsesEnum: Unable to process backend responses", ex);
+				throw;
+			}
+		}
 
         protected IEnumerable<IServerResponseObject> ProcessBackendResponses_Ver_2(NpgsqlConnector context)
         {
-            NpgsqlEventLog.LogMethodEnter(LogLevel.Debug, CLASSNAME, "ProcessBackendResponses");
+            NpgsqlEventLog.LogMethodEnter(LogLevel.Debug, CLASSNAME, "ProcessBackendResponses_Ver_2");
 
             using (new ContextResetter(context))
             {
@@ -648,22 +665,58 @@ namespace Npgsql
 
         protected IEnumerable<IServerResponseObject> ProcessBackendResponses_Ver_3(NpgsqlConnector context)
         {
-            NpgsqlEventLog.LogMethodEnter(LogLevel.Debug, CLASSNAME, "ProcessBackendResponses");
+            NpgsqlEventLog.LogMethodEnter(LogLevel.Debug, CLASSNAME, "ProcessBackendResponses_Ver_3");
 
             using (new ContextResetter(context))
             {
-                Stream stream = context.Stream;
-                NpgsqlMediator mediator = context.Mediator;
+				Stream stream = context.Stream;
+
+				NpgsqlMediator mediator = context.Mediator;
 
                 NpgsqlRowDescription lastRowDescription = null;
 
                 List<NpgsqlError> errors = new List<NpgsqlError>();
 
-                for (;;)
+				var usgetter = stream.GetType().GetProperty("UnderlyingStream", BindingFlags.GetProperty | BindingFlags.Instance | BindingFlags.NonPublic);
+				var ustream = usgetter.GetValue(stream, null) as NetworkStream;
+				int? timeoutOrig = null;
+				_Log.TraceFormat("UnderlyingStream: Stream.CanRead: {0} CanTimeout: {1} ReadTimeout: {2} Socket.ReceiveTimeout {3} Command.Timeout {4}", ustream?.CanRead, ustream?.CanTimeout, ustream?.ReadTimeout, context.Socket.ReceiveTimeout, context.CommandTimeout);
+
+				for (;;)
                 {
-                    // Check the first Byte of response.
-                    BackEndMessageCode message = (BackEndMessageCode) stream.ReadByte();
-                    switch (message)
+					BackEndMessageCode message = default(BackEndMessageCode);
+					try
+					{
+						if (ustream != null && context.CommandTimeout > 0)
+						{
+							timeoutOrig = ustream.ReadTimeout;
+							_Log.Trace($"Current ReadTimeout {timeoutOrig}. Setting ReadTimeout to: {context.CommandTimeout * 1000}ms");
+							ustream.ReadTimeout = context.CommandTimeout * 1000;
+						}
+						else
+							timeoutOrig = null;
+
+						_Log.Trace($"Reading first response byte");
+						// Check the first Byte of response.
+						message = (BackEndMessageCode)stream.ReadByte();
+
+						if(timeoutOrig.HasValue)
+						{
+							_Log.Trace($"Setting again ReadTimeout to {timeoutOrig}ms");
+							ustream.ReadTimeout = timeoutOrig.Value;
+						}
+					}
+					catch (Exception ex)
+					{
+						_Log.Error($"Exception in stream.ReadByte()", ex);
+						throw;
+					}
+					finally
+					{
+						_Log.Trace($"ReadByte() done with message: {message}");
+					}
+
+					switch (message)
                     {
                         case BackEndMessageCode.ErrorResponse:
 
@@ -965,9 +1018,9 @@ namespace Npgsql
                             // what exception should we really throw here?
                             throw new NotSupportedException(String.Format("Backend sent unrecognized response type: {0}", (Char) message));
                     }
-                }
-            }
-        }
+				}
+			}
+		}
 
 
         private static NpgsqlCopyFormat ReadCopyHeader(Stream stream)
@@ -990,9 +1043,12 @@ namespace Npgsql
     {
         private readonly int? _rowsAffected;
         private readonly long? _lastInsertedOID;
+		private static readonly global::Common.Logging.ILog _Log = global::Common.Logging.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
-        public CompletedResponse(Stream stream)
+		public CompletedResponse(Stream stream)
         {
+			_Log.Trace("Processing completed response stream");
+
             string[] tokens = PGUtil.ReadString(stream).Split();
             if (tokens.Length > 1)
             {
@@ -1006,9 +1062,11 @@ namespace Npgsql
             _lastInsertedOID = (tokens.Length > 2 && tokens[0].Trim().ToUpperInvariant() == "INSERT")
                                    ? long.Parse(tokens[1])
                                    : (long?) null;
-        }
 
-        public long? LastInsertedOID
+			_Log.Trace("Processing completed response stream - DONE");
+		}
+
+		public long? LastInsertedOID
         {
             get { return _lastInsertedOID; }
         }

@@ -39,6 +39,8 @@ namespace Npgsql
 		private readonly NpgsqlCommand _command;
 		private readonly ProtocolVersion _protocolVersion;
 
+		private static readonly global::Common.Logging.ILog _Log = global::Common.Logging.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+
 		public NpgsqlQuery(NpgsqlCommand command, ProtocolVersion protocolVersion)
 		{
 			_command = command;
@@ -49,12 +51,13 @@ namespace Npgsql
 		{
 			//NpgsqlEventLog.LogMsg( this.ToString() + _commandText, LogLevel.Debug  );
 
-
 			StringBuilder commandText = _command.GetCommandText();
 
-            // Log the string being sent.
+			_Log.Trace($"WriteToStream command with {commandText.Length} chars");
 
-            if (NpgsqlEventLog.Level >= LogLevel.Debug)
+			// Log the string being sent.
+
+			if (NpgsqlEventLog.Level >= LogLevel.Debug)
                 PGUtil.LogStringWritten(commandText.ToString());
 
             // This method needs refactory.
@@ -63,18 +66,19 @@ namespace Npgsql
             // Find a way to optimize that. 
             
             
-
 			// Tell to mediator what command is being sent.
 
 			_command.Connector.Mediator.SetSqlSent(commandText);
             
 			// Workaround for seek exceptions when running under ms.net. TODO: Check why Npgsql may be letting behind data in the stream.
-		        outputStream.Flush();
+		    outputStream.Flush();
 
 			// Send the query to server.
 			// Write the byte 'Q' to identify a query message.
 			outputStream.WriteByte((byte) FrontEndMessageCode.Query);
-			
+
+			_Log.Trace ($"Wrote {FrontEndMessageCode.Query} message");
+
 			//Work out the encoding of the string (null-terminated) once and take the length from having done so
 			//rather than doing so repeatedly.
 			byte[] bytes = UTF8Encoding.GetBytes(commandText.Append('\x00').ToString());
@@ -83,10 +87,15 @@ namespace Npgsql
 			{
 				// Write message length. Int32 + string length + null terminator.
 				PGUtil.WriteInt32(outputStream, 4 + bytes.Length);
+
+				_Log.DebugFormat("WriteInt32 length {0} bytes", 4 + bytes.Length);
 			}
-			
+
+			_Log.Trace($"Writtng to stream. CanWrite: {outputStream.CanWrite} CanTimeout: {outputStream.CanTimeout} WriteTimeout: {outputStream.WriteTimeout}");
+
 			outputStream.Write(bytes, 0, bytes.Length);
 
+			_Log.Trace($"Wrote to outputStream {bytes.Length} bytes - DONE");
 		}
 	}
 }
