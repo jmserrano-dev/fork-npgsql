@@ -60,6 +60,8 @@ namespace Npgsql
 	/// </summary>
 	public class NpgsqlEventLog
 	{
+		private static readonly global::Common.Logging.ILog _Log = global::Common.Logging.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+
 		// Logging related values
 		private static readonly String CLASSNAME = MethodBase.GetCurrentMethod().DeclaringType.Name;
 		private static String logfile;
@@ -150,7 +152,12 @@ namespace Npgsql
 				return;
 			}
 
-			Process proc = Process.GetCurrentProcess();
+			switch (msglevel)
+			{
+				case LogLevel.Debug: _Log.Debug(message); break;
+				case LogLevel.Normal: _Log.Info(message); break;
+				default: _Log.Info(message); break;
+			}
 
 			if (echomessages)
 			{
@@ -161,6 +168,7 @@ namespace Npgsql
 			{
 				lock (logfile)
 				{
+					Process proc = Process.GetCurrentProcess();
 					StreamWriter writer = new StreamWriter(logfile, true);
 
 					// The format of the logfile is
