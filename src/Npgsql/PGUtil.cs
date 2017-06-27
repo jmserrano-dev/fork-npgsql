@@ -542,8 +542,9 @@ namespace Npgsql
 		public static int ReadByteFor(this Stream stream, int timeout)
 		{
 			// OPTIMIZE: Try to avoid reflecting on each invocation. (pruiz)
-			var usgetter = stream.GetType().GetProperty("UnderlyingStream", BindingFlags.GetProperty | BindingFlags.Instance | BindingFlags.NonPublic);
-			var ustream = usgetter.GetValue(stream, null) as NetworkStream;
+			//var usgetter = stream.GetType().GetProperty("UnderlyingStream", BindingFlags.GetProperty | BindingFlags.Instance | BindingFlags.NonPublic);
+			//var ustream = usgetter.GetValue(stream, null) as NetworkStream;
+			var ustream = stream as NetworkStream;
 			int? saved_timeout = null;
 			int? result = null;
 

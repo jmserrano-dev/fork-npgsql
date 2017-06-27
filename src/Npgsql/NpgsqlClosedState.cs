@@ -182,7 +182,8 @@ namespace Npgsql
 					}
 				}
 
-				context.Stream = new BufferedStream(stream);
+				//context.Stream = new BufferedStream(stream);
+				context.Stream = stream;
 				context.Socket = socket;
 
 
