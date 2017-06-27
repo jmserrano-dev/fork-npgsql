@@ -671,6 +671,8 @@ namespace Npgsql
             {
 				Stream stream = context.Stream;
 
+				_Log.TraceFormat($"NpgsqlConnector Socket Blocking:{context.Socket?.Blocking} Connected: {context.Socket?.Connected} DontFragment: {context.Socket?.DontFragment}");
+
 				NpgsqlMediator mediator = context.Mediator;
 
                 NpgsqlRowDescription lastRowDescription = null;
