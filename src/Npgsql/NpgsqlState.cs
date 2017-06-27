@@ -356,18 +356,18 @@ namespace Npgsql
             {
 				// Process commandTimeout behavior.
 
-				_Log.Debug($"Entering ProcessBackendResponsesEnum. CommandTimeout: {context.Mediator.CommandTimeout}");
+				_Log.Trace($"Entering ProcessBackendResponsesEnum. CommandTimeout: {context.Mediator.CommandTimeout}");
 
 				if ((context.Mediator.CommandTimeout > 0) &&
 					(!context.Socket.Poll(1000000*context.Mediator.CommandTimeout, SelectMode.SelectRead)))
 				{
-					_Log.Debug("Managing timeout");
+					_Log.Trace("Managing timeout");
 
 					// If timeout occurs when establishing the session with server then
 					// throw an exception instead of trying to cancel query. This helps to prevent loop as CancelRequest will also try to stablish a connection and sends commands.
 					if (!((this is NpgsqlStartupState || this is NpgsqlConnectedState)))
 					{
-						_Log.Debug("Managing not NpgsqlStartupState neither NpgsqlConnectedState");
+						_Log.Trace("Managing not NpgsqlStartupState neither NpgsqlConnectedState");
 						try
 						{
 							context.CancelRequest();
@@ -391,7 +391,7 @@ namespace Npgsql
 					throw new NpgsqlException(resman.GetString("Exception_ConnectionOrCommandTimeout"));
 				}
 
-				_Log.Debug($"ProcessBackendResponsesEnum with protocol version {context.BackendProtocolVersion}");
+				_Log.Trace($"ProcessBackendResponsesEnum with protocol version {context.BackendProtocolVersion}");
 
 				switch (context.BackendProtocolVersion)
 				{
@@ -704,7 +704,7 @@ namespace Npgsql
 					catch (Exception ex)
 					{
 						_Log.Error($"Exception {ex.GetType().Name} in stream.ReadByte()", ex);
-						throw new NpgsqlException("Timeout while reading from socket!", ex);
+						throw;
 					}
 					finally
 					{
@@ -877,13 +877,15 @@ namespace Npgsql
 
                             NpgsqlEventLog.LogMsg(resman, "Log_ProtocolMessage", LogLevel.Debug, "ReadyForQuery");
 
-                            // Possible status bytes returned:
-                            //   I = Idle (no transaction active).
-                            //   T = In transaction, ready for more.
-                            //   E = Error in transaction, queries will fail until transaction aborted.
-                            // Just eat the status byte, we have no use for it at this time.
-                            PGUtil.ReadInt32(stream);
-                            stream.ReadByte();
+							// Possible status bytes returned:
+							//   I = Idle (no transaction active).
+							//   T = In transaction, ready for more.
+							//   E = Error in transaction, queries will fail until transaction aborted.
+							// Just eat the status byte, we have no use for it at this time.
+							var status = (char) BitConverter.GetBytes(PGUtil.ReadInt32(stream))[0];
+                            var lastByte = (char)stream.ReadByte();
+
+							_Log.Trace($"Status after ReadyForQuery: {status} last byte {lastByte}");
 
                             ChangeState(context, NpgsqlReadyState.Instance);
 

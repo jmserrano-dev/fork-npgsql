@@ -886,7 +886,7 @@ namespace Npgsql
                     "There is already an open DataReader associated with this Command which must be closed first.");
             }
 
-			_Log.Debug($"Connector.State: {Connector.State}");
+			_Log.Trace($"Connector.State: {Connector.State}");
         }
 
         /// <summary>
@@ -1500,7 +1500,7 @@ namespace Npgsql
                 timeout = (int)NpgsqlConnectionStringBuilder.GetDefaultValue(Keywords.CommandTimeout);
             }
 
-			_Log.Debug($"Set command timeout to {timeout}");
+			_Log.Trace($"Set command timeout to {timeout}");
         }
 
         internal NpgsqlException ClearPoolAndCreateException(Exception e)

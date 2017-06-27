@@ -88,7 +88,7 @@ namespace Npgsql
 				// Write message length. Int32 + string length + null terminator.
 				PGUtil.WriteInt32(outputStream, 4 + bytes.Length);
 
-				_Log.DebugFormat("WriteInt32 length {0} bytes", 4 + bytes.Length);
+				_Log.TraceFormat("WriteInt32 length {0} bytes", 4 + bytes.Length);
 			}
 
 			_Log.Trace($"Writtng to stream. CanWrite: {outputStream.CanWrite} CanTimeout: {outputStream.CanTimeout}");
