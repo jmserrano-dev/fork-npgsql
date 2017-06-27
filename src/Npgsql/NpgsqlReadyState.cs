@@ -75,13 +75,8 @@ namespace Npgsql
 				_Log.Error($"QueryEnum: unable to write to stream", ex);
 				throw;
 			}
-
-			//_Log.Debug($"Stream flushed. Processing responses {context.Stream}");
-			_Log.Trace("QueryEnum stream flushed. Processing responses");
-			var responses = ProcessBackendResponsesEnum(context);
-			_Log.Trace($"QueryEnum a total of {responses.Count()} responses processed");
-
-			return responses;
+						
+			return ProcessBackendResponsesEnum(context);
 		}
 
 		public override void Parse(NpgsqlConnector context, NpgsqlParse parse)
