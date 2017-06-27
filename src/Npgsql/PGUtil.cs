@@ -32,6 +32,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Resources;
 using System.Text;
@@ -44,6 +45,8 @@ namespace Npgsql
 	/// </summary>
 	internal static class PGUtil
 	{
+		private static readonly global::Common.Logging.ILog _Log = global::Common.Logging.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+
 		// Logging related values
 		private static readonly String CLASSNAME = MethodBase.GetCurrentMethod().DeclaringType.Name;
 		internal static readonly ResourceManager resman = new ResourceManager(MethodBase.GetCurrentMethod().DeclaringType);
@@ -535,6 +538,44 @@ namespace Npgsql
             NpgsqlEventLog.LogMsg(resman, "Log_StringWritten", LogLevel.Debug, theString);
             
         }
+
+		public static int ReadByteFor(this Stream stream, int timeout)
+		{
+			// OPTIMIZE: Try to avoid reflecting on each invocation. (pruiz)
+			var usgetter = stream.GetType().GetProperty("UnderlyingStream", BindingFlags.GetProperty | BindingFlags.Instance | BindingFlags.NonPublic);
+			var ustream = usgetter.GetValue(stream, null) as NetworkStream;
+			int? saved_timeout = null;
+			int? result = null;
+
+			_Log.TraceFormat("UnderlyingStream: Stream.CanRead: {0} CanTimeout: {1} ReadTimeout: {2} timeout {3}", ustream?.CanRead, ustream?.CanTimeout, ustream?.ReadTimeout, timeout);
+
+			if (ustream != null && timeout > 0)
+			{
+				saved_timeout = ustream.ReadTimeout;
+				_Log.Trace($"Current ReadTimeout {saved_timeout}. Setting ReadTimeout to: {timeout * 1000}ms");
+				ustream.ReadTimeout = timeout * 1000;
+			}
+
+			try
+			{
+				result = stream.ReadByte();
+				return result.Value;
+			}
+			catch (Exception ex)
+			{
+				_Log.Error($"Exception {ex.GetType().Name} in stream.ReadByte()", ex);
+				throw;
+			}
+			finally
+			{
+				_Log.Trace($"ReadByte() done with message: {result}");
+				if (saved_timeout.HasValue)
+				{
+					_Log.Trace($"Setting again ReadTimeout to {saved_timeout}ms");
+					ustream.ReadTimeout = saved_timeout.Value;
+				}
+			}
+		}
     }
 
 	/// <summary>

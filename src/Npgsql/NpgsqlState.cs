@@ -169,7 +169,7 @@ namespace Npgsql
             int newByte;
             for (;;)
             {
-                switch (newByte = stm.ReadByte())
+				switch (newByte = stm.ReadByteFor(context.CommandTimeout))
                 {
                     case -1:
                         throw new EndOfStreamException();
@@ -438,7 +438,7 @@ namespace Npgsql
                 for (;;)
                 {
                     // Check the first Byte of response.
-                    switch ((BackEndMessageCode) stream.ReadByte())
+					switch ((BackEndMessageCode) stream.ReadByteFor(context.CommandTimeout))
                     {
                         case BackEndMessageCode.ErrorResponse:
 
@@ -677,44 +677,9 @@ namespace Npgsql
 
                 List<NpgsqlError> errors = new List<NpgsqlError>();
 
-				var usgetter = stream.GetType().GetProperty("UnderlyingStream", BindingFlags.GetProperty | BindingFlags.Instance | BindingFlags.NonPublic);
-				var ustream = usgetter.GetValue(stream, null) as NetworkStream;
-				int? timeoutOrig = null;
-				_Log.TraceFormat("UnderlyingStream: Stream.CanRead: {0} CanTimeout: {1} ReadTimeout: {2} Socket.ReceiveTimeout {3} Command.Timeout {4}", ustream?.CanRead, ustream?.CanTimeout, ustream?.ReadTimeout, context.Socket.ReceiveTimeout, context.CommandTimeout);
-
 				for (;;)
                 {
-					BackEndMessageCode message = default(BackEndMessageCode);
-					try
-					{
-						if (ustream != null && context.CommandTimeout > 0)
-						{
-							timeoutOrig = ustream.ReadTimeout;
-							_Log.Trace($"Current ReadTimeout {timeoutOrig}. Setting ReadTimeout to: {context.CommandTimeout * 1000}ms");
-							ustream.ReadTimeout = context.CommandTimeout * 1000;
-						}
-						else
-							timeoutOrig = null;
-
-						_Log.Trace($"Reading first response byte");
-						// Check the first Byte of response.
-						message = (BackEndMessageCode)stream.ReadByte();
-
-					}
-					catch (Exception ex)
-					{
-						_Log.Error($"Exception {ex.GetType().Name} in stream.ReadByte()", ex);
-						throw;
-					}
-					finally
-					{
-						_Log.Trace($"ReadByte() done with message: {message}");
-						if (timeoutOrig.HasValue)
-						{
-							_Log.Trace($"Setting again ReadTimeout to {timeoutOrig}ms");
-							ustream.ReadTimeout = timeoutOrig.Value;
-						}
-					}
+					BackEndMessageCode message = (BackEndMessageCode)context.Stream.ReadByteFor(context.CommandTimeout);
 
 					switch (message)
                     {
@@ -883,7 +848,7 @@ namespace Npgsql
 							//   E = Error in transaction, queries will fail until transaction aborted.
 							// Just eat the status byte, we have no use for it at this time.
 							var status = (char) BitConverter.GetBytes(PGUtil.ReadInt32(stream))[0];
-                            var lastByte = (char)stream.ReadByte();
+							var lastByte = (char)stream.ReadByteFor(context.CommandTimeout);
 
 							_Log.Trace($"Status after ReadyForQuery: {status} last byte {lastByte}");
 
