@@ -555,8 +555,8 @@ namespace Npgsql
 			if (ustream != null && timeout > 0)
 			{
 				saved_timeout = ustream.ReadTimeout;
-				_Log.Trace($"Current ReadTimeout {saved_timeout}. Setting ReadTimeout to: {timeout * 1000}ms");
 				ustream.ReadTimeout = timeout * 1000;
+				_Log.Trace($"Current ReadTimeout {saved_timeout}. Setting ReadTimeout to: {ustream.ReadTimeout}ms");
 			}
 
 			try
