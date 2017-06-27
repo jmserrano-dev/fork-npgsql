@@ -1505,7 +1505,11 @@ namespace Npgsql
 
         internal NpgsqlException ClearPoolAndCreateException(Exception e)
         {
-            Connection.ClearPool();
+			if (Connection == null)
+			{
+				_Log.Warn("No Connection while trying yo clear pool?");
+			}
+            Connection?.ClearPool();
             return new NpgsqlException(resman.GetString("Exception_ConnectionBroken"), e);
         }
 
