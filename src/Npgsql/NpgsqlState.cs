@@ -700,20 +700,20 @@ namespace Npgsql
 						// Check the first Byte of response.
 						message = (BackEndMessageCode)stream.ReadByte();
 
-						if(timeoutOrig.HasValue)
-						{
-							_Log.Trace($"Setting again ReadTimeout to {timeoutOrig}ms");
-							ustream.ReadTimeout = timeoutOrig.Value;
-						}
 					}
 					catch (Exception ex)
 					{
-						_Log.Error($"Exception in stream.ReadByte()", ex);
-						throw new NpgsqlException("Timedout while reading from socket!", ex);
+						_Log.Error($"Exception {ex.GetType().Name} in stream.ReadByte()", ex);
+						throw new NpgsqlException("Timeout while reading from socket!", ex);
 					}
 					finally
 					{
 						_Log.Trace($"ReadByte() done with message: {message}");
+						if (timeoutOrig.HasValue)
+						{
+							_Log.Trace($"Setting again ReadTimeout to {timeoutOrig}ms");
+							ustream.ReadTimeout = timeoutOrig.Value;
+						}
 					}
 
 					switch (message)
