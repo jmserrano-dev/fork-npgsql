@@ -91,7 +91,7 @@ namespace Npgsql
 				_Log.DebugFormat("WriteInt32 length {0} bytes", 4 + bytes.Length);
 			}
 
-			_Log.Trace($"Writtng to stream. CanWrite: {outputStream.CanWrite} CanTimeout: {outputStream.CanTimeout} WriteTimeout: {outputStream.WriteTimeout}");
+			_Log.Trace($"Writtng to stream. CanWrite: {outputStream.CanWrite} CanTimeout: {outputStream.CanTimeout}");
 
 			outputStream.Write(bytes, 0, bytes.Length);
 
