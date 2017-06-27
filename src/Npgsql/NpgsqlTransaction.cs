@@ -42,7 +42,8 @@ namespace Npgsql
     /// </summary>
     public sealed class NpgsqlTransaction : DbTransaction
     {
-        private static readonly String CLASSNAME = MethodBase.GetCurrentMethod().DeclaringType.Name;
+		private static readonly global::Common.Logging.ILog _Log = global::Common.Logging.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+		private static readonly String CLASSNAME = MethodBase.GetCurrentMethod().DeclaringType.Name;
         private static readonly ResourceManager resman = new ResourceManager(MethodBase.GetCurrentMethod().DeclaringType);
 
         private NpgsqlConnection _conn = null;
@@ -120,12 +121,15 @@ namespace Npgsql
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing && this._conn != null)
+			_Log.Trace($"Dispose({disposing})");
+
+			if (disposing && this._conn != null)
             {
-                if (_conn.Connector.Transaction != null)
+                if (_conn.Connector != null && _conn.Connector.Transaction != null)
                 {
                     if ((Thread.CurrentThread.ThreadState & (ThreadState.Aborted | ThreadState.AbortRequested)) != 0)
                     {
+						_Log.Trace("Dispose with connection close");
                         // can't count on Rollback working if the thread has been aborted
                         // need to copy since Cancel will set it to null
                         NpgsqlConnection conn = _conn;
@@ -135,7 +139,8 @@ namespace Npgsql
                     }
                     else
                     {
-                        this.Rollback();
+						_Log.Trace("Dispose with rollback");
+						this.Rollback();
                     }
                 }
 
@@ -254,8 +259,9 @@ namespace Npgsql
         internal void Cancel()
         {
             CheckDisposed();
+			_Log.Trace("Cancel()");
 
-            if (_conn != null)
+			if (_conn != null)
             {
                 _conn.Connector.Transaction = null;
                 _conn = null;
