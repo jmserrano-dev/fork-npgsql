@@ -709,7 +709,7 @@ namespace Npgsql
 					catch (Exception ex)
 					{
 						_Log.Error($"Exception in stream.ReadByte()", ex);
-						throw;
+						throw new NpgsqlException("Timedout while reading from socket!", ex);
 					}
 					finally
 					{
